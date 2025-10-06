@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { Wind } from "lucide-react";
+import leaf1 from "@assets/stock_images/realistic_autumn_map_a699260e.jpg";
+import leaf2 from "@assets/stock_images/realistic_autumn_map_28e311ec.jpg";
+import leaf3 from "@assets/stock_images/realistic_autumn_map_66cc9b91.jpg";
+import leaf4 from "@assets/stock_images/realistic_autumn_map_558c06ed.jpg";
+import leaf5 from "@assets/stock_images/realistic_autumn_map_493d54f5.jpg";
+import blowerImage from "@assets/stock_images/realistic_leaf_blowe_b9542ba0.jpg";
 
 interface Leaf {
   id: number;
@@ -10,34 +15,46 @@ interface Leaf {
   rotation: number;
   rotationSpeed: number;
   scale: number;
-  emoji: string;
+  image: string;
   opacity: number;
+  driftPhase: number;
+  settling: boolean;
+  depth: number;
 }
+
+const leafImages = [leaf1, leaf2, leaf3, leaf4, leaf5];
 
 export default function FallingLeaves() {
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [blowerPos, setBlowerPos] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
+  const [blowerPos, setBlowerPos] = useState({ 
+    x: typeof window !== 'undefined' ? window.innerWidth - 100 : 800, 
+    y: typeof window !== 'undefined' ? window.innerHeight - 100 : 600 
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [isBlowing, setIsBlowing] = useState(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const animationFrameRef = useRef<number>();
   const nextLeafIdRef = useRef(0);
+  const lastSpawnRef = useRef(0);
 
-  const leafEmojis = ["🍂", "🍁"];
-
-  const createLeaf = (): Leaf => {
-    const emoji = leafEmojis[Math.floor(Math.random() * leafEmojis.length)];
+  const createLeaf = (delayedY?: number): Leaf => {
+    const image = leafImages[Math.floor(Math.random() * leafImages.length)];
+    const depth = 0.4 + Math.random() * 0.6;
+    
     return {
       id: nextLeafIdRef.current++,
-      x: Math.random() * window.innerWidth,
-      y: -50,
-      velocityX: (Math.random() - 0.5) * 1,
-      velocityY: 1 + Math.random() * 2,
+      x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1000),
+      y: delayedY ?? -80,
+      velocityX: (Math.random() - 0.5) * 0.8,
+      velocityY: 0.3 + Math.random() * 0.5,
       rotation: Math.random() * 360,
-      rotationSpeed: (Math.random() - 0.5) * 5,
-      scale: 0.6 + Math.random() * 0.6,
-      emoji,
+      rotationSpeed: (Math.random() - 0.5) * 2,
+      scale: depth * (0.5 + Math.random() * 0.5),
+      image,
       opacity: 1,
+      driftPhase: Math.random() * Math.PI * 2,
+      settling: false,
+      depth,
     };
   };
 
@@ -45,54 +62,92 @@ export default function FallingLeaves() {
     const initialLeaves: Leaf[] = [];
     for (let i = 0; i < 25; i++) {
       const leaf = createLeaf();
-      leaf.y = Math.random() * window.innerHeight;
+      if (typeof window !== 'undefined') {
+        leaf.y = Math.random() * window.innerHeight;
+      }
       initialLeaves.push(leaf);
     }
     setLeaves(initialLeaves);
-
-    const spawnInterval = setInterval(() => {
-      setLeaves((prev) => {
-        if (prev.length < 30) {
-          return [...prev, createLeaf()];
-        }
-        return prev;
-      });
-    }, 800);
-
-    return () => clearInterval(spawnInterval);
   }, []);
 
   useEffect(() => {
-    const animate = () => {
+    const animate = (timestamp: number) => {
+      if (!lastSpawnRef.current) lastSpawnRef.current = timestamp;
+      
+      if (timestamp - lastSpawnRef.current > 600) {
+        setLeaves((prev) => {
+          if (prev.length < 35) {
+            return [...prev, createLeaf()];
+          }
+          return prev;
+        });
+        lastSpawnRef.current = timestamp;
+      }
+
       setLeaves((prevLeaves) => {
         const updated = prevLeaves.map((leaf) => {
           let newLeaf = { ...leaf };
-
+          
+          const gravity = 0.015 * newLeaf.depth;
+          newLeaf.velocityY += gravity;
+          
+          newLeaf.driftPhase += 0.02;
+          const drift = Math.sin(newLeaf.driftPhase) * 0.3;
+          newLeaf.velocityX += drift;
+          
           if (isBlowing) {
             const dx = leaf.x - blowerPos.x;
             const dy = leaf.y - blowerPos.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
+            const blowerRadius = 300;
 
-            if (distance < 250) {
-              const force = Math.max(0, (250 - distance) / 250) * 15;
+            if (distance < blowerRadius) {
+              const forceMagnitude = Math.pow((blowerRadius - distance) / blowerRadius, 1.5) * 0.8;
               const angle = Math.atan2(dy, dx);
-              newLeaf.velocityX += Math.cos(angle) * force;
-              newLeaf.velocityY += Math.sin(angle) * force;
+              
+              const pushX = Math.cos(angle) * forceMagnitude;
+              const pushY = Math.sin(angle) * forceMagnitude;
+              
+              newLeaf.velocityX += pushX;
+              newLeaf.velocityY += pushY - (gravity * 2);
+              
+              newLeaf.settling = false;
+              newLeaf.rotationSpeed = (Math.random() - 0.5) * 8;
             }
           }
-
+          
+          const windResistance = 0.02;
+          newLeaf.velocityX *= (1 - windResistance);
+          
+          if (Math.abs(newLeaf.velocityY) < 0.5 && !isBlowing && Math.random() > 0.98) {
+            newLeaf.settling = true;
+            newLeaf.velocityY *= 0.95;
+          }
+          
+          if (newLeaf.settling) {
+            newLeaf.velocityY *= 0.98;
+            newLeaf.velocityX *= 0.98;
+            newLeaf.rotationSpeed *= 0.95;
+            
+            if (Math.abs(newLeaf.velocityY) < 0.05) {
+              newLeaf.velocityY = Math.sin(newLeaf.driftPhase) * 0.1;
+            }
+          }
+          
+          newLeaf.velocityY = Math.min(newLeaf.velocityY, 4);
+          newLeaf.velocityY = Math.max(newLeaf.velocityY, -4);
+          
           newLeaf.x += newLeaf.velocityX;
           newLeaf.y += newLeaf.velocityY;
           newLeaf.rotation += newLeaf.rotationSpeed;
 
-          newLeaf.velocityX += (Math.random() - 0.5) * 0.1;
-          newLeaf.velocityX *= 0.98;
-          newLeaf.velocityY = Math.min(newLeaf.velocityY, 5);
-
-          if (newLeaf.y > window.innerHeight + 50 ||
-              newLeaf.x < -50 ||
-              newLeaf.x > window.innerWidth + 50) {
-            newLeaf.opacity = 0;
+          if (typeof window !== 'undefined') {
+            if (newLeaf.y > window.innerHeight + 100 ||
+                newLeaf.x < -100 ||
+                newLeaf.x > window.innerWidth + 100 ||
+                newLeaf.y < -100) {
+              newLeaf.opacity = 0;
+            }
           }
 
           return newLeaf;
@@ -182,18 +237,46 @@ export default function FallingLeaves() {
         {leaves.map((leaf) => (
           <div
             key={leaf.id}
-            className="absolute text-4xl transition-opacity duration-300"
+            className="absolute transition-opacity duration-500"
             style={{
               left: `${leaf.x}px`,
               top: `${leaf.y}px`,
               transform: `rotate(${leaf.rotation}deg) scale(${leaf.scale})`,
               opacity: leaf.opacity,
+              filter: `drop-shadow(${2 * leaf.depth}px ${3 * leaf.depth}px ${4 * leaf.depth}px rgba(0,0,0,0.3))`,
+              zIndex: Math.floor(leaf.depth * 10),
             }}
           >
-            {leaf.emoji}
+            <img
+              src={leaf.image}
+              alt=""
+              className="w-16 h-16 object-contain"
+              style={{ 
+                transform: `perspective(100px) rotateY(${Math.sin(leaf.driftPhase) * 15}deg)`,
+              }}
+            />
           </div>
         ))}
       </div>
+
+      {isBlowing && (
+        <div
+          className="fixed pointer-events-none z-45"
+          style={{
+            left: `${blowerPos.x}px`,
+            top: `${blowerPos.y}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div 
+            className="absolute inset-0 w-[300px] h-[300px] -translate-x-1/2 -translate-y-1/2"
+            style={{
+              background: `radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)`,
+              animation: "windPulse 0.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+      )}
 
       <div
         className="fixed z-50 pointer-events-auto"
@@ -208,18 +291,39 @@ export default function FallingLeaves() {
         data-testid="button-leaf-blower"
       >
         <div
-          className={`h-16 w-16 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center transition-all ${
-            isBlowing ? "scale-110 shadow-primary/50" : ""
-          } hover:scale-105`}
+          className={`relative transition-all ${
+            isBlowing ? "scale-105" : ""
+          } hover:scale-110`}
+          style={{
+            animation: isBlowing ? "blowerVibrate 0.1s ease-in-out infinite" : "none",
+          }}
         >
-          <Wind
-            className={`h-8 w-8 transition-transform ${isBlowing ? "animate-pulse scale-110" : ""}`}
+          <img
+            src={blowerImage}
+            alt="Leaf Blower"
+            className="w-20 h-20 object-contain drop-shadow-2xl"
+            style={{
+              filter: isBlowing 
+                ? "drop-shadow(0 0 20px rgba(234, 88, 12, 0.5)) brightness(1.1)" 
+                : "drop-shadow(0 10px 25px rgba(0,0,0,0.3))",
+            }}
           />
         </div>
-        {isBlowing && (
-          <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping pointer-events-none" />
-        )}
       </div>
+
+      <style>{`
+        @keyframes windPulse {
+          0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+          50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        @keyframes blowerVibrate {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          25% { transform: translate(-1px, 1px) rotate(-1deg); }
+          50% { transform: translate(1px, -1px) rotate(1deg); }
+          75% { transform: translate(-1px, -1px) rotate(-0.5deg); }
+        }
+      `}</style>
     </>
   );
 }
