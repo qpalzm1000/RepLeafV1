@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import leaf1 from "@assets/stock_images/realistic_autumn_map_a699260e.jpg";
-import leaf2 from "@assets/stock_images/realistic_autumn_map_28e311ec.jpg";
-import leaf3 from "@assets/stock_images/realistic_autumn_map_66cc9b91.jpg";
-import leaf4 from "@assets/stock_images/realistic_autumn_map_558c06ed.jpg";
-import leaf5 from "@assets/stock_images/realistic_autumn_map_493d54f5.jpg";
-import blowerImage from "@assets/stock_images/realistic_leaf_blowe_b9542ba0.jpg";
+import leaf1 from "@assets/stock_images/leaf.png";
+import leaf2 from "@assets/stock_images/leaf.png";
+import leaf3 from "@assets/stock_images/leaf.png";
+import leaf4 from "@assets/stock_images/leaf.png";
+import leaf5 from "@assets/stock_images/leaf.png";
+import blowerImage from "@assets/stock_images/leafblower.png";
 
 interface Leaf {
   id: number;
