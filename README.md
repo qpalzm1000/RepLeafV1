@@ -34,6 +34,7 @@ Otherwise, clone it locally with:
 ```bash
 git clone https://github.com/qpalzm1000/RepLeafV1
 cd RepLeafV1
+```markdown
 ### 2️⃣ Install dependencies
 ```bash
 npm install
